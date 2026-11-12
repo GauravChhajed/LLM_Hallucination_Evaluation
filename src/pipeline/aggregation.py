@@ -14,8 +14,12 @@ import numpy as np
 
 
 def _stat_block(values: Sequence[Optional[float | int]]) -> Dict[str, Any]:
-    """Compute mean, std, and exact valid sample count `n`."""
-    clean = [float(v) for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    """Compute mean, std, and exact valid finite sample count `n`."""
+    clean = [
+        float(v)
+        for v in values
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and np.isfinite(float(v))
+    ]
     if not clean:
         return {"mean": None, "std": None, "n": 0}
     return {
@@ -85,7 +89,11 @@ def _aggregate_subset(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
             "empty_response_count": gen_empty,
             "failed_count": gen_error,
             "response_time_seconds": _stat_block(
-                [r.get("generation_time_seconds") for r in records if r.get("generation_status") != "error"]
+                [
+                    r.get("generation_time_seconds")
+                    for r in records
+                    if r.get("generation_status") in {"success", "empty_response"}
+                ]
             ),
         },
         "reference_evaluation": {
