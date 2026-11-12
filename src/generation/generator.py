@@ -12,6 +12,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+import gc
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -92,6 +93,10 @@ class BaseLLMGenerator(ABC):
     ) -> GenerationResult:
         """Generate an answer for a single question and optional context."""
 
+    def unload(self) -> None:
+        """Release any held model/tokenizer memory (no-op for stateless backends)."""
+        return None
+
 
 class HuggingFaceLocalGenerator(BaseLLMGenerator):
     """Response generator backed by a local Hugging Face causal or seq2seq model."""
@@ -121,6 +126,14 @@ class HuggingFaceLocalGenerator(BaseLLMGenerator):
                 local_files_only=self.local_files_only,
             )
         return self._loaded
+
+    def unload(self) -> None:
+        """Unload cached model and tokenizer weights from memory."""
+        if self._loaded is not None:
+            self._loaded = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def _build_generate_kwargs(self, tokenizer: Any) -> Dict[str, Any]:
         cfg = self.generation_config

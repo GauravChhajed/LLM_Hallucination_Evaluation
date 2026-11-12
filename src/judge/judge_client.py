@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import gc
 from typing import Any, Callable, Dict, Optional
 
 import requests
@@ -68,6 +69,10 @@ class BaseJudgeClient(ABC):
     @abstractmethod
     def evaluate_prompt(self, prompt: JudgePromptPayload) -> JudgeRawResponse:
         """Send a standardized prompt to the judge model and return raw text output."""
+
+    def unload(self) -> None:
+        """Release any held judge model resources (no-op for stateless backends)."""
+        return None
 
 
 class ModelBackedJudgeClient(BaseJudgeClient):
@@ -265,6 +270,14 @@ class ModelBackedJudgeClient(BaseJudgeClient):
         if self.spec.is_local:
             return self._run_local(prompt)
         return self._run_api(prompt)
+
+    def unload(self) -> None:
+        """Unload any cached local judge model weights from memory."""
+        if self._loaded is not None:
+            self._loaded = None
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 def create_judge_client(
